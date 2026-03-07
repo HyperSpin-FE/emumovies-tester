@@ -1,7 +1,7 @@
 namespace EmuMoviesTester.Models;
 
 public record SystemInfo(
-    int Id,
+    Guid Id,
     string Name,
     string? Description = null,
     string? Manufacturer = null,

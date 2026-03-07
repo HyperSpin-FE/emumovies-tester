@@ -5,9 +5,9 @@ namespace EmuMoviesTester.Services;
 
 public class MediaDownloader
 {
-    private readonly EmuMoviesApiClient _client;
+    private readonly IEmuMoviesApiClient _client;
 
-    public MediaDownloader(EmuMoviesApiClient client)
+    public MediaDownloader(IEmuMoviesApiClient client)
     {
         _client = client;
     }

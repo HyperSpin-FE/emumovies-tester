@@ -6,7 +6,17 @@ using Spectre.Console;
 
 namespace EmuMoviesTester.Services;
 
-public class EmuMoviesApiClient : IDisposable
+public interface IEmuMoviesApiClient : IDisposable
+{
+    Task<bool> AuthenticateAsync(string username, string password);
+    bool TryLoadCachedToken();
+    Task<List<SystemInfo>> GetSystemsAsync();
+    Task<List<MediaTypeInfo>> GetMediaTypesAsync();
+    Task<List<MediaFile>> GetMediaFilesAsync(Guid systemId, string mediaTypeName);
+    Task<(bool success, int statusCode)> DownloadFileAsync(Guid systemId, string mediaTypeName, string filename, string outputPath);
+}
+
+public class EmuMoviesApiClient : IEmuMoviesApiClient
 {
     private readonly HttpClient _authClient;
     private readonly HttpClient _apiClient;
@@ -18,15 +28,22 @@ public class EmuMoviesApiClient : IDisposable
     private const string ApiBase = "https://emapi.emumovies.com/";
     private const string ClientId = "ff650dea5028d095b35d5ed6596b90b2";
     private const string ClientSecret = "bab6c5d31ae2dad7cafb62c645fb024bb3cb951de9bf11f9";
+    private const string ApiKey = "45a36b69f17cfd831c085dd7fcc39caf4c38b58b007e0acacb50c34e00e400eb";
 
-    public EmuMoviesApiClient()
+    public EmuMoviesApiClient() : this(new HttpClient { Timeout = TimeSpan.FromSeconds(30) },
+        new HttpClient { BaseAddress = new Uri(ApiBase), Timeout = TimeSpan.FromSeconds(60) })
     {
-        _authClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        _apiClient = new HttpClient
-        {
-            BaseAddress = new Uri(ApiBase),
-            Timeout = TimeSpan.FromSeconds(60)
-        };
+    }
+
+    public EmuMoviesApiClient(HttpClient authClient, HttpClient apiClient)
+    {
+        _authClient = authClient;
+        _apiClient = apiClient;
+
+        if (_apiClient.BaseAddress == null)
+            _apiClient.BaseAddress = new Uri(ApiBase);
+
+        _apiClient.DefaultRequestHeaders.Add("X-API-Key", ApiKey);
 
         _jsonOptions = new JsonSerializerOptions
         {
@@ -136,12 +153,12 @@ public class EmuMoviesApiClient : IDisposable
         if (result == null) return new List<MediaTypeInfo>();
 
         return result
-            .Select(t => new MediaTypeInfo(t.Id, t.Name ?? "Unknown", t.Description))
+            .Select(t => new MediaTypeInfo(t.Name ?? "Unknown", t.Description))
             .OrderBy(t => t.Name)
             .ToList();
     }
 
-    public async Task<List<MediaFile>> GetMediaFilesAsync(int systemId, string mediaTypeName)
+    public async Task<List<MediaFile>> GetMediaFilesAsync(Guid systemId, string mediaTypeName)
     {
         var result = await ExecuteWithRetryAsync<List<MediaFileInternal>>(
             $"api/Media/systems/{systemId}/files?type={Uri.EscapeDataString(mediaTypeName)}");
@@ -153,7 +170,7 @@ public class EmuMoviesApiClient : IDisposable
     }
 
     public async Task<(bool success, int statusCode)> DownloadFileAsync(
-        int systemId, string mediaTypeName, string filename, string outputPath)
+        Guid systemId, string mediaTypeName, string filename, string outputPath)
     {
         if (_accessToken == null)
             return (false, 401);
@@ -253,14 +270,14 @@ public class EmuMoviesApiClient : IDisposable
     }
 
     private record SystemInfoInternal(
-        int Id,
+        Guid Id,
         string? Name,
         string? Description,
         string? Manufacturer,
         string? Category
     );
 
-    private record MediaTypeInternal(int Id, string? Name, string? Description);
+    private record MediaTypeInternal(string? Name, string? Description);
 
     private record MediaFileInternal(string? Filename, string? Name, string? Url, long? Size);
 }
