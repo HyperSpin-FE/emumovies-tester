@@ -38,8 +38,9 @@ public class MediaDownloader
                 availableFiles = new List<MediaFile>();
             }
 
+            // Compare by name without extension — ROM ext (.z64) differs from media ext (.jpg)
             var availableSet = availableFiles
-                .Select(f => f.Filename.ToLowerInvariant())
+                .Select(f => Path.GetFileNameWithoutExtension(f.Filename).ToLowerInvariant())
                 .ToHashSet();
 
             foreach (var gameFile in gameFiles)
@@ -58,8 +59,9 @@ public class MediaDownloader
                     continue;
                 }
 
-                // Check if available
-                if (!availableSet.Contains(filename.ToLowerInvariant()) && availableSet.Count > 0)
+                // Check if available (compare by name without extension — ROM ext differs from media ext)
+                var gameNameWithoutExt = Path.GetFileNameWithoutExtension(filename).ToLowerInvariant();
+                if (!availableSet.Contains(gameNameWithoutExt) && availableSet.Count > 0)
                 {
                     stats.NotAvailable++;
                     onProgress(stats);
