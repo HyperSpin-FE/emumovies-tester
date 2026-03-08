@@ -38,18 +38,27 @@ public class MediaDownloader
                 availableFiles = new List<MediaFile>();
             }
 
-            // Compare by name without extension — ROM ext (.z64) differs from media ext (.jpg)
-            var availableSet = availableFiles
-                .Select(f => Path.GetFileNameWithoutExtension(f.Filename).ToLowerInvariant())
-                .ToHashSet();
+            // Build lookup: clean name -> actual server filename (preserves real extension)
+            var availableLookup = availableFiles
+                .GroupBy(f => Path.GetFileNameWithoutExtension(f.Filename).ToLowerInvariant())
+                .ToDictionary(g => g.Key, g => g.First().Filename);
 
             foreach (var gameFile in gameFiles)
             {
                 if (cancellationToken.IsCancellationRequested) break;
 
                 var filename = Path.GetFileName(gameFile);
-                var outputPath = Path.Combine("media", mediaType.Name, system.Name, filename);
+                var gameNameWithoutExt = Path.GetFileNameWithoutExtension(filename).ToLowerInvariant();
                 stats.CurrentFile = filename;
+
+                // Look up the actual server filename to get the correct extension
+                string? serverFilename = null;
+                if (availableLookup.TryGetValue(gameNameWithoutExt, out var matched))
+                    serverFilename = matched;
+
+                // Use server extension for output path (e.g. .jpg not .zip)
+                var outputFilename = serverFilename ?? filename;
+                var outputPath = Path.Combine("media", mediaType.Name, system.Name, outputFilename);
 
                 // Skip if exists
                 if (File.Exists(outputPath))
@@ -59,9 +68,8 @@ public class MediaDownloader
                     continue;
                 }
 
-                // Check if available (compare by name without extension — ROM ext differs from media ext)
-                var gameNameWithoutExt = Path.GetFileNameWithoutExtension(filename).ToLowerInvariant();
-                if (!availableSet.Contains(gameNameWithoutExt) && availableSet.Count > 0)
+                // Check if available
+                if (serverFilename == null && availableLookup.Count > 0)
                 {
                     stats.NotAvailable++;
                     onProgress(stats);
